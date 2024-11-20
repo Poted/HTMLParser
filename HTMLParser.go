@@ -45,7 +45,7 @@ func getInput() string {
 
 	// -h flag description
 	urlFlagPtr := flag.String("url", "", "URL of the webpage to parse")
-	defaultUrlPtr := flag.Bool("d", true, "default url")
+	defaultUrlPtr := flag.Bool("d", false, "default url")
 	flag.Parse()
 
 	inputURL := *urlFlagPtr
