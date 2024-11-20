@@ -8,7 +8,6 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"os"
 	"strings"
 )
 
@@ -33,14 +32,13 @@ func HTMLParser() {
 		log.Fatalf("failed to fetch data. %v", err)
 	}
 
-	// In this function HTML data is proccessed using a stream
-	html, err := parseHTML(data)
+	biggestListElement, err := countElements(&data)
 	if err != nil {
-		log.Fatalf("error parsing HTML: %v", err)
+		log.Fatal("internal server error")
 	}
 
 	// Returning an output with number of <li> elements:
-	fmt.Printf("List with the most <li> children has %d items.\n", countItems(html))
+	fmt.Printf("List with the most <li> children has %d items.\n", biggestListElement)
 }
 
 func getInput() string {
@@ -85,105 +83,49 @@ func getHTML(url string) ([]byte, error) {
 	return data, nil
 }
 
-func parseHTML(html []byte) (*Node, error) {
+func countElements(html *[]byte) (int, error) {
 
-	// making a stream
-	parser := NewParser(bytes.NewReader(html))
-	root := &Node{Tag: "root"}
-	stack := []*Node{root} // stack to store elements
+	parser := NewParser(bytes.NewReader(*html))
 
-	///
 	inside := false
-	_ = inside
 	count := 0
+	biggest := 0
 
-	///
+	max := func(v int) int {
+		if v > biggest {
+			return v
+		}
+		return biggest
+	}
 
-	// s := *parser
-
-	// fmt.Printf("s.r: %v\n", s.r)
-
-	// looping through HTML elements until we reach the end of a file
+	// looping through HTML elements
 	for {
 		token, err := parser.NextToken()
 		if err == io.EOF {
 			break
 		}
 		if err != nil {
-			return nil, err
+			return 0, err
 		}
 
-		// fmt.Printf("current: %v\n", token)
-
-		// Checking if token is start/end tag to keep track of nested tags inside a html
-		// If it's start tag: we append this tag to stack as a node of previous node
-		// If the ending tag matches with current first element on stack it pops it out
 		switch t := token.(type) {
 		case StartTagToken:
 			if t.TagName == "ul" {
 				inside = true
-				// fmt.Printf("start token: %v\n", token)
 			} else if t.TagName == "li" && inside {
-				// fmt.Printf("\"start li \": %v\n", "start li ")
 				count++
 			}
-			newNode := &Node{Tag: t.TagName}
-			stack[len(stack)-1].Children = append(stack[len(stack)-1].Children, newNode)
-			stack = append(stack, newNode)
 		case EndTagToken:
 			if t.TagName == "ul" {
 				inside = false
-				fmt.Fprintf(os.Stdout, "xxx				count: %v\n", []any{count}...)
-				// fmt.Printf("end token: %v\n", token)
+				biggest = max(count)
 				count = 0
 			}
-
-			if len(stack) > 1 {
-				stack = stack[:len(stack)-1]
-			}
 		}
 
 	}
 
-	// Returning first node from the function so we can traverse it later and count <li> elements
-	return root, nil
-}
-
-// This function count <li> tags inside <ul> tags recursively
-func countItems(html *Node) int {
-
-	maxItems := 0
-	var countChildren func(node *Node)
-
-	countChildren = func(node *Node) {
-
-		if node.Tag == "ul" {
-			count := 0
-
-			for _, child := range node.Children {
-				if child.Tag == "li" {
-					count++
-				}
-			}
-
-			fmt.Printf("Found <ul> with %d <li> elements\n", count) // Debug log
-			if count > maxItems {
-				maxItems = count
-			}
-		}
-		for _, child := range node.Children {
-			countChildren(child)
-		}
-	}
-	countChildren(html)
-
-	return maxItems
-}
-
-// Tree Node object: Tag is representing html elements ("divs, ul, li etc.")
-type Node struct {
-	Tag      string
-	Children []*Node
+	return biggest, nil
 }
 
 // Html parser object
@@ -224,8 +166,6 @@ func (d *Parser) NextToken() (interface{}, error) {
 				d.inTag = false
 				name := strings.Fields(d.buf.String())[0]
 				d.buf.Reset()
-
-				// fmt.Printf("name: %v\n", name)
 
 				if d.isEnd {
 					d.isEnd = false
